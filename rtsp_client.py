@@ -18,7 +18,7 @@ class RTSPClient(Protocol):
         self.session = 1
         # Authorization part
         if self.config['login']:
-            authstring = 'Authorization: Basic ' + b64encode(self.config['login']+':'+self.config['pass']) + '\r\n'
+            authstring = 'Authorization: Basic ' + b64encode(self.config['login']+':'+self.config['password']) + '\r\n'
         else:
             authstring = ''
         # send OPTIONS request
@@ -31,7 +31,7 @@ User-Agent: Python MJPEG Client\r
         self.transport.write(to_send)
         if debug:
             print 'We say:\n', to_send
-    
+
     def dataReceived(self, data):
         if debug:
             print 'Server said:\n', data
@@ -90,8 +90,8 @@ User-Agent: Python MJPEG Client\r
                                 audio_track = params[1]
                     if not is_MJPEG:
                         print "Stream", self.config['ip'] + self.config['request'], 'is not an MJPEG stream!'
-                    if video_track: self.config['video_track'] = 'rtsp://' + self.config['ip'] + self.config['request'] + '/' + basename(video_track)
-                    if audio_track: self.config['audio_track'] = 'rtsp://' + self.config['ip'] + self.config['request'] + '/' + basename(audio_track)
+                    if video_track: self.config['video_track'] = 'rtsp://' + self.config['ip'] + self.config['request'] + '/trackID=0' 
+                    if audio_track: self.config['audio_track'] = 'rtsp://' + self.config['ip'] + self.config['request'] + '/trackID=1'
                     to_send = """\
 SETUP """ + self.config['video_track'] + """ RTSP/1.0\r
 CSeq: 3\r
@@ -130,7 +130,7 @@ User-Agent: Python MJPEG Client\r
                 if debug:
                     print 'PLAY'
                 pass
-                
+
             elif "cseq: "+str(5+cseq_audio) in data_ln:
                 if debug:
                     print 'TEARDOWN'
@@ -142,7 +142,7 @@ User-Agent: Python MJPEG Client\r
                     print 'We say:\n', to_send
 
 class RTSPFactory(ClientFactory):
-    
+
     def __init__(self, config):
         self.protocol = RTSPClient
         self.config = config
@@ -154,5 +154,3 @@ class RTSPFactory(ClientFactory):
     def clientConnectionLost(self, connector, reason):
         print 'Reconnecting'
         connector.connect()
-
-
