@@ -21,16 +21,17 @@ def processImage(img):
     'This function is invoked by the MJPEG Client protocol'
     # Process image
     # Just save it as a file in this example
+    print "PROCESSING IMAGE"
     f = open('frame.jpg', 'wb')
     f.write(img)
     f.close()
 
 def main():
     print 'Python M-JPEG Over RSTP Client 0.1'
-    config = {'request': '/jpeg',
-          'login': '',
+    config = {'request': '/cam/realmonitor?channel=1&subtype=0',
+          'login': 'admin',
           'password': 'admin',
-          'ip': '192.168.0.252',
+          'ip': '192.168.0.205',
           'port': 554,
           'udp_port': 41760,
           'callback': processImage}
