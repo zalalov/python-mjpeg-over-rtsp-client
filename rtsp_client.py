@@ -14,23 +14,59 @@ class RTSPClient(Protocol):
         self.config = {}
         self.wait_description = False
 
-    def connectionMade(self):
-        self.session = 1
-        # Authorization part
+    def get_authstring(self):
         if self.config['login']:
-            authstring = 'Authorization: Basic ' + b64encode(self.config['login']+':'+self.config['password']) + '\r\n'
+            return 'Authorization: Basic ' + b64encode(self.config['login']+':'+self.config['password'])
         else:
-            authstring = ''
-        # send OPTIONS request
-        to_send = """\
-OPTIONS rtsp://""" + self.config['ip'] + self.config['request'] + """ RTSP/1.0\r
-""" + authstring + """CSeq: 1\r
-User-Agent: Python MJPEG Client\r
-\r
-"""
-        self.transport.write(to_send)
+            return ''
+
+    @staticmethod
+    def get_useragent():
+        return "LibVLC/2.2.1 (LIVE555 Streaming Media v2014.07.25)"
+
+    def options_req(self):
+        req = "OPTIONS rtsp://%s%s %s" % (self.config['ip'], self.config['request'], " RTSP/1.0\r\n")
+        req += self.get_authstring() + "\r\n"
+        req += "CSeq: 1\r\n"
+        req += "User-Agent: %s\r\n\r\n" % self.get_useragent()
+
+        return req
+
+    def describe_req(self):
+        req = "DESCRIBE rtsp://%s%s RTSP/1.0\r\n" % (self.config['ip'], self.config['request'])
+        req += self.get_authstring() + "\r\n"
+        req += "CSeq: 2\r\n"
+        req += "Accept: application/sdp\r"
+        req += "User-Agent: %s\r\n\r\n" % self.get_useragent()
+
+        return req
+
+    def connectionMade(self):
+        self.session = "1"
+        options_req = self.options_req()
+        self.transport.write(options_req)
+
         if debug:
-            print 'We say:\n', to_send
+            print 'We say:\n', options_req
+
+    def setup_req(self, cseq, track, ports):
+        req = "SETUP %s RTSP/1.0r\n" % track
+        req += "CSeq: %s\r\n" % cseq
+        req += "Transport: RTP/AVP;unicast;client_port=%s-%s\r\n" % ports
+        req += "Session: %s\r\n" % self.session
+        req += "User-Agent: %s\r\n\r\n" % self.get_useragent()
+
+        return req
+
+    def play_req(self, cseq):
+        req = "PLAY rtsp://%s:%s%s RTSP/1.0\r\n""" % (self.config["ip"], self.config["port"], self.config["request"])
+        req += "CSeq: %s\r\n" % str(cseq)
+        req += self.get_authstring() + "\r\n"
+        req += "Session: %s\r\n" % self.session
+        req += "Range: npt=0.000-\r\n"
+        req += "User-Agent: %s" % self.get_useragent() + "\r\n\r\n"
+
+        return req
 
     def dataReceived(self, data):
         if debug:
@@ -46,15 +82,10 @@ User-Agent: Python MJPEG Client\r
             else:
                 cseq_audio = 0
             to_send = ''
+
             if 'cseq: 1' in data_ln:
                 # CSeq 1 -> DESCRIBE
-                to_send = """\
-DESCRIBE rtsp://""" + self.config['ip'] + self.config['request'] + """ RTSP/1.0\r
-CSeq: 2\r
-Accept: application/sdp\r
-User-Agent: Python MJPEG Client\r
-\r
-"""
+                to_send = self.describe_req()
             elif 'cseq: 2' in data_ln or self.wait_description:
                 # CSeq 2 -> Parse SDP and then SETUP
                 data_sp = data.lower().strip().split('\r\n\r\n', 1)
@@ -90,42 +121,22 @@ User-Agent: Python MJPEG Client\r
                                 audio_track = params[1]
                     if not is_MJPEG:
                         print "Stream", self.config['ip'] + self.config['request'], 'is not an MJPEG stream!'
-                    if video_track: self.config['video_track'] = 'rtsp://' + self.config['ip'] + self.config['request'] + '/trackID=0' 
+                    if video_track: self.config['video_track'] = 'rtsp://%s/trackID=0' % (self.config['ip'] + self.config['request'])
                     if audio_track: self.config['audio_track'] = 'rtsp://' + self.config['ip'] + self.config['request'] + '/trackID=1'
-                    to_send = """\
-SETUP """ + self.config['video_track'] + """ RTSP/1.0\r
-CSeq: 3\r
-Transport: RTP/AVP;unicast;client_port=""" + str(self.config['udp_port']) + """-"""+ str(self.config['udp_port'] + 1) + """\r
-User-Agent: Python MJPEG Client\r
-\r
-"""
+                    to_send = self.setup_req(3, self.config["video_track"], (str(self.config['udp_port']), str(self.config['udp_port'] + 1)))
                     self.wait_description = False
                 else:
                     # Do not have SDP in the first UDP packet, wait for it
                     self.wait_description = True
             elif "cseq: 3" in data_ln and 'audio_track' in self.config:
                 # CSeq 3 -> SETUP audio if present
-                self.session = data_ln[5].strip().split(' ')[1]
-                to_send = """\
-SETUP """ + self.config['audio_track'] + """ RTSP/1.0\r
-CSeq: 4\r
-Transport: RTP/AVP;unicast;client_port=""" + str(self.config['udp_port_audio']) + """-"""+ str(self.config['udp_port_audio'] + 1) + """\r
-Session: """ + self.session + """\r
-User-Agent: Python MJPEG Client\r
-\r
-"""
-                reactor.listenUDP(self.config['udp_port_audio'], rtp_audio_client.RTP_AUDIO_Client(self.config))
-                reactor.listenUDP(self.config['udp_port_audio'] + 1, rtcp_client.RTCP_Client()) # RTCP
+                self.session = data_ln[3].split(";")[0].split()[1]
+                to_send = self.setup_req(4, self.config["audio_track"], (str(self.config['udp_port_audio']), str(self.config['udp_port_audio'] + 1)))
+                # reactor.listenUDP(self.config['udp_port_audio'], rtp_audio_client.RTP_AUDIO_Client(self.config))
+                # reactor.listenUDP(self.config['udp_port_audio'] + 1, rtcp_client.RTCP_Client()) # RTCP
             elif "cseq: "+str(3+cseq_audio) in data_ln:
                 # PLAY
-                to_send = """\
-PLAY rtsp://""" + self.config['ip'] + self.config['request'] + """/ RTSP/1.0\r
-CSeq: """ + str(4+cseq_audio) + """\r
-Session: """ + self.session + """\r
-Range: npt=0.000-\r
-User-Agent: Python MJPEG Client\r
-\r
-"""
+                to_send = self.play_req(str(4+cseq_audio))
             elif "cseq: "+str(4+cseq_audio) in data_ln:
                 if debug:
                     print 'PLAY'
@@ -153,4 +164,4 @@ class RTSPFactory(ClientFactory):
 
     def clientConnectionLost(self, connector, reason):
         print 'Reconnecting'
-        connector.connect()
+        # connector.connect()

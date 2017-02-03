@@ -17,6 +17,7 @@ import rtsp_client
 import rtp_mjpeg_client
 import rtcp_client
 
+
 def processImage(img):
     'This function is invoked by the MJPEG Client protocol'
     # Process image
@@ -26,15 +27,18 @@ def processImage(img):
     f.write(img)
     f.close()
 
+
 def main():
     print 'Python M-JPEG Over RSTP Client 0.1'
-    config = {'request': '/cam/realmonitor?channel=1&subtype=0',
-          'login': 'admin',
-          'password': 'admin',
-          'ip': '192.168.0.205',
-          'port': 554,
-          'udp_port': 41760,
-          'callback': processImage}
+    config = {
+        'request': '/cam/realmonitor?channel=1&subtype=0',
+        'login': 'admin',
+        'password': 'admin',
+        'ip': '192.168.0.207',
+        'port': 554,
+        'udp_port': 41760,
+        'callback': processImage
+    }
     # Prepare RTP MJPEG client (technically it's a server)
     reactor.listenUDP(config['udp_port'], rtp_mjpeg_client.RTP_MJPEG_Client(config))
     reactor.listenUDP(config['udp_port'] + 1, rtcp_client.RTCP_Client()) # RTCP
