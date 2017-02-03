@@ -16,39 +16,35 @@ from twisted.internet import reactor
 import rtsp_client
 import rtp_mjpeg_client
 import rtcp_client
+from time import time
 
 
 def processImage(img):
-    'This function is invoked by the MJPEG Client protocol'
-    # Process image
-    # Just save it as a file in this example
-    print "PROCESSING IMAGE"
-    f = open('frame.jpg', 'wb')
+    f = open(str(time()).split('.')[0] + ".jpg", "wb")
     f.write(img)
     f.close()
 
 
 def main():
-    print 'Python M-JPEG Over RSTP Client 0.1'
     config = {
-        'request': '/cam/realmonitor?channel=1&subtype=0',
-        'login': 'admin',
-        'password': 'admin',
-        'ip': '192.168.0.207',
-        'port': 554,
-        'udp_port': 41760,
-        'callback': processImage
+        "request": "/",
+        "login": "admin",
+        "password": "admin",
+        "ip": "192.168.0.205",
+        "port": 554,
+        "udp_port": 41760,
+        "callback": processImage
     }
-    # Prepare RTP MJPEG client (technically it's a server)
-    reactor.listenUDP(config['udp_port'], rtp_mjpeg_client.RTP_MJPEG_Client(config))
-    reactor.listenUDP(config['udp_port'] + 1, rtcp_client.RTCP_Client()) # RTCP
+    # Prepare RTP MJPEG client (technically it"s a server)
+    reactor.listenUDP(config["udp_port"], rtp_mjpeg_client.RTP_MJPEG_Client(config))
+    reactor.listenUDP(config["udp_port"] + 1, rtcp_client.RTCP_Client()) # RTCP
     # And RSTP client
-    reactor.connectTCP(config['ip'], config['port'], rtsp_client.RTSPFactory(config))
+    reactor.connectTCP(config["ip"], config["port"], rtsp_client.RTSPFactory(config))
     # Run both of them
     reactor.run()
     # On exit:
-    print 'Python M-JPEG Client stopped.'
+    print "Python M-JPEG Client stopped."
 
 # this only runs if the module was *not* imported
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
